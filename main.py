@@ -1,25 +1,17 @@
 import googleapiclient.discovery
 import string
 import re
+from dotenv import load_dotenv
+import os
+import json
+import requests
+import syllables
+import random
 
-DEVELOPER_KEY = "AIzaSyC05pt4JqXZg11dA9TmswMGrepGdVTYmz4"
+load_dotenv()
+DEVELOPER_KEY = os.getenv("devkey")
 VIDEO_ID = "zdo-QYvR8Uk"
-
-##### LOADING THE SYLLABLE DICTIONARY #####
-
-def load_syllables(file_path):
-    syllables = {}
-    digits = tuple(string.digits)
-    
-    with open(file_path, "r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line and line[0] != ";"]
-
-    for line in lines:
-        tokens = line.split()
-        count = len([token for token in tokens[1:] if token.endswith(digits)])
-        syllables[tokens[0].lower()] = count
-
-    return syllables
+WEBHOOK_URL = os.getenv("webhook")
 
 ##### GET COMMENTS #####
 
@@ -51,27 +43,13 @@ def get_comments(video_id):
 
 ##### COUNT SYLLABLES #####
 
-def estimate_syllables(word):
-    word = word.lower()
-    vowels = "aeiouy"
-    count = 0
-    prev_vowel = False
-    for c in word:
-        if c in vowels:
-            if not prev_vowel:
-                count += 1
-            prev_vowel = True
-        else:
-            prev_vowel = False
-    return max(1, count)
-
-def count_syllables(comment, syllable_data):
+def count_syllables(comment):
     words = comment.split()
     word_counts = []
 
     for word in words:
         cleaned = word.translate(str.maketrans("", "", string.punctuation)).lower()
-        count = syllable_data.get(cleaned, estimate_syllables(cleaned))
+        count = syllables.estimate(cleaned)
         word_counts.append((word, count))
 
     return word_counts
@@ -115,17 +93,24 @@ def build_haiku(word_counts):
 ##### MAIN #####
 
 def main():
-    syllable_data = load_syllables("Words.txt")
+
     comments = get_comments(VIDEO_ID)
 
-    print("\n-- Generated Haikus --\n")
-    for i, comment in enumerate(comments):
-        word_counts = count_syllables(comment, syllable_data)
+    haikus = []
+
+    
+    for comment in comments:
+        word_counts = count_syllables(comment)
         haiku = build_haiku(word_counts)
         if haiku:
-            print(f"Haiku from comment {i + 1}:")
-            print(haiku)
-            print()
+            haikus.append(haiku)
+    
+    random_haiku = random.choice(haikus)
+
+    payload = {"content": random_haiku}
+
+    requests.post(WEBHOOK_URL, json=payload)
+
 
 if __name__ == "__main__":
     main()
